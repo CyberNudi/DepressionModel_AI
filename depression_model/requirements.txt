@@ -6,3 +6,4 @@ numpy
 pandas
 librosa
 matplotlib
+python-multipart
