@@ -234,7 +234,7 @@ import uvicorn
 @app.post("/predict")
 async def predict_endpoint(file: UploadFile = File(...)):
     """
-    接收上傳音訊並輸出模型預測值
+    接收上傳音訊並輸出模型預測值與分級
     """
     # 暫存檔案
     temp_path = f"temp_{file.filename}"
@@ -243,9 +243,12 @@ async def predict_endpoint(file: UploadFile = File(...)):
 
     # 預測
     try:
-        pred = predict_audio(temp_path, model_file="model_weighted.pkl")
+        score, stage = predict_audio(temp_path, model_file="model_weighted.pkl")
         os.remove(temp_path)
-        return {"predicted_PHQ8": round(pred, 3)}
+        return {
+            "predicted_PHQ8": round(score, 3),
+            "stage": stage
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -269,4 +272,5 @@ if __name__ == "__main__":
         )
     else:
         uvicorn.run(app, host="0.0.0.0", port=10000)
+
 
