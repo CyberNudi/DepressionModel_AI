@@ -114,7 +114,7 @@
   const loadingText = document.getElementById("loadingText");
 
   // enable/disable UI while loading
-  function setLoading(isLoading, message = "⏳ 預測中…") {
+  function setLoading(isLoading, message = "⏳ 預測中…(預估時間：三分鐘)") {
     if (isLoading) {
       loadingText.textContent = message;
       loadingOverlay.style.display = "flex";
@@ -145,7 +145,7 @@
   }
 
   async function fetchWithTimeout(resource, options = {}) {
-    const { timeout = 30000 } = options;
+    const { timeout = 300000 } = options;
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
@@ -241,3 +241,4 @@
 
 </body>
 </html>
+
