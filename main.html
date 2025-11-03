@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>語音憂鬱檢測系統（PHQ-8 模型）</title>
+  <style>
+    body {
+      font-family: "Microsoft JhengHei", sans-serif;
+      background-color: #0e0e0e;
+      color: #ffffff;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      background-image: radial-gradient(circle at top left, #1e1e1e, #000);
+    }
+
+    h1 { text-align: center; color: #ffffff; margin-bottom: 20px; font-size: 28px; letter-spacing: 2px; }
+    .section { background: rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 30px; width: 90%; max-width: 750px; box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); }
+    hr { margin: 30px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.2); }
+    h2 { color: #ffffff; text-align: center; margin-bottom: 10px; }
+    p { text-align: center; color: #cccccc; font-size: 14px; }
+
+    .file-section, .record-section { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .file-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+    input[type="file"] { color: #ccc; background: transparent; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; padding: 5px; cursor: pointer; }
+    button { padding: 8px 14px; border: none; background-color: #3498db; color: white; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
+    button:hover { background-color: #2980b9; transform: scale(1.03); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    audio { margin-top: 10px; width: 100%; border-radius: 8px; }
+
+    .result-container { display: flex; justify-content: space-around; margin-top: 20px; flex-wrap: wrap; gap: 10px; }
+    .result-box { flex: 1; min-width: 250px; background-color: rgba(255,255,255,0.06); border-radius: 12px; padding: 15px; text-align: center; transition: background 0.3s; }
+    .result-box:hover { background-color: rgba(255,255,255,0.12); }
+    .result-title { font-weight: bold; color: #66b3ff; margin-bottom: 6px; letter-spacing: 1px; }
+    .result-text { font-size: 20px; font-weight: bold; color: #ffffff; min-height: 28px; }
+
+    .loading-overlay { position: fixed; left: 0; top: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 9999; }
+    .loading-card { background: rgba(255,255,255,0.06); border-radius: 12px; padding: 18px 24px; display: flex; align-items: center; gap: 12px; color: #fff; box-shadow: 0 8px 30px rgba(0,0,0,0.6); backdrop-filter: blur(6px); }
+    .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); border-top-color: #66b3ff; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <h1>語音憂鬱檢測系統</h1>
+
+  <div class="section" id="mainSection">
+    <h2>使用預先錄製的音訊</h2>
+    <div class="file-section">
+      <div class="file-row">
+        <input type="file" id="audioFile" accept="audio/*">
+        <span id="fileName">未選擇檔案</span>
+        <button id="uploadFileBtn">上傳並預測</button>
+      </div>
+      <audio id="previewAudio" controls></audio>
+    </div>
+
+    <hr />
+
+    <h2>立刻錄音檢測</h2>
+    <p>說說今天發生了什麼事，或你現在的感覺是什麼：</p>
+    <div class="record-section">
+      <div>
+        <button id="startRecord">開始錄音</button>
+        <button id="stopRecord" disabled>停止錄音</button>
+        <button id="uploadRecord" disabled>上傳並預測</button>
+      </div>
+      <audio id="recordedAudio" controls></audio>
+    </div>
+
+    <div class="result-container">
+      <div class="result-box">
+        <div class="result-title">回歸模型結果</div>
+        <div id="regressionResult" class="result-text">尚無結果</div>
+      </div>
+      <div class="result-box">
+        <div class="result-title">CNN 模型結果</div>
+        <div id="cnnResult" class="result-text">尚無結果</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay" aria-hidden="true">
+    <div class="loading-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="loadingText">⏳ 預測中…</div>
+    </div>
+  </div>
+
+  <script>
+  // ========== Render 後端 API ==========
+  const backendUrl = "https://depressionmodel-ai.onrender.com/predict";
+
+  // DOM
+  const fileInput = document.getElementById("audioFile");
+  const fileName = document.getElementById("fileName");
+  const previewAudio = document.getElementById("previewAudio");
+  const uploadFileBtn = document.getElementById("uploadFileBtn");
+
+  const startBtn = document.getElementById("startRecord");
+  const stopBtn = document.getElementById("stopRecord");
+  const uploadRecordBtn = document.getElementById("uploadRecord");
+  const recordedAudio = document.getElementById("recordedAudio");
+
+  const regressionResult = document.getElementById("regressionResult");
+  const cnnResult = document.getElementById("cnnResult");
+
+  const loadingOverlay = document.getElementById("loadingOverlay");
+  const loadingText = document.getElementById("loadingText");
+
+  // enable/disable UI while loading
+  function setLoading(isLoading, message = "⏳ 預測中…") {
+    if (isLoading) {
+      loadingText.textContent = message;
+      loadingOverlay.style.display = "flex";
+    } else {
+      loadingOverlay.style.display = "none";
+    }
+    uploadFileBtn.disabled = isLoading;
+    uploadRecordBtn.disabled = isLoading || !recordedAudio.src;
+    fileInput.disabled = isLoading;
+    startBtn.disabled = isLoading;
+    stopBtn.disabled = isLoading || stopBtn.disabled;
+  }
+
+  function showPredictingState() {
+    regressionResult.textContent = "⏳ 預測中…";
+    cnnResult.textContent = "⏳ 預測中…";
+  }
+
+  function displayResults(data) {
+    if (!data) {
+      regressionResult.textContent = "⚠️ 無回傳資料";
+      cnnResult.textContent = "⚠️ 無回傳資料";
+      return;
+    }
+    // 從後端直接抓分段文字
+    regressionResult.textContent = data.regression_stage || "無資料";
+    cnnResult.textContent = data.cnn_stage || "無資料";
+  }
+
+  async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 30000 } = options;
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+      const resp = await fetch(resource, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return resp;
+    } catch (err) {
+      clearTimeout(id);
+      throw err;
+    }
+  }
+
+  // 統一上傳函數
+  async function uploadAudio(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    setLoading(true);
+    showPredictingState();
+    try {
+      const res = await fetchWithTimeout(backendUrl, { method: "POST", body: formData });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      displayResults(data);
+    } catch (err) {
+      regressionResult.textContent = "⚠️ 上傳或網路錯誤";
+      cnnResult.textContent = "⚠️ 上傳或網路錯誤";
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // file change
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (file) {
+      fileName.textContent = file.name;
+      previewAudio.src = URL.createObjectURL(file);
+    } else {
+      fileName.textContent = "未選擇檔案";
+      previewAudio.src = "";
+    }
+  });
+
+  // 上傳檔案
+  uploadFileBtn.addEventListener("click", () => {
+    const file = fileInput.files[0];
+    if (!file) return alert("請先選擇音訊檔案！");
+    uploadAudio(file);
+  });
+
+  // 錄音功能
+  let mediaRecorder, recordedChunks = [];
+
+  startBtn.addEventListener("click", async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: "audio/wav" });
+        recordedAudio.src = URL.createObjectURL(blob);
+        uploadRecordBtn.disabled = false;
+      };
+      mediaRecorder.start();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      regressionResult.textContent = "🎙️ 錄音中…";
+      cnnResult.textContent = "🎙️ 錄音中…";
+    } catch (err) {
+      alert("無法取得麥克風權限或裝置不支援。");
+      console.error(err);
+    }
+  });
+
+  stopBtn.addEventListener("click", () => {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    regressionResult.textContent = "✅ 錄音完成，可上傳";
+    cnnResult.textContent = "✅ 錄音完成，可上傳";
+  });
+
+  uploadRecordBtn.addEventListener("click", () => {
+    if (!recordedChunks.length) return alert("請先錄音再上傳。");
+    const blob = new Blob(recordedChunks, { type: "audio/wav" });
+    uploadAudio(blob);
+  });
+
+  setLoading(false);
+</script>
+
+</body>
+</html>
