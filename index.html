@@ -93,6 +93,21 @@
   </div>
 
   <script>
+    // 自動喚醒 Render 服務
+  async function wakeUpService() {
+    try {
+      console.log("喚醒後端服務中...");
+      await fetch(backendUrl, { method: "HEAD", mode: "no-cors" });
+      console.log("服務喚醒完成！");
+    } catch (err) {
+      console.warn("服務喚醒可能失敗:", err);
+    }
+  }
+  
+  // 網頁載入時自動喚醒
+  window.addEventListener("load", () => {
+    wakeUpService();
+  });
   // ========== Render 後端 API ==========
   const backendUrl = "https://depressionmodel-ai.onrender.com/predict";
 
@@ -254,6 +269,7 @@
 
 </body>
 </html>
+
 
 
 
