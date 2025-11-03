@@ -93,148 +93,167 @@
   </div>
 
   <script>
-// ========== Render 後端 API ==========
-const backendUrl = "https://depressionmodel-ai.onrender.com/predict";
+  // ========== Render 後端 API ==========
+  const backendUrl = "https://depressionmodel-ai.onrender.com/predict";
 
-// DOM
-const fileInput = document.getElementById("audioFile");
-const fileName = document.getElementById("fileName");
-const previewAudio = document.getElementById("previewAudio");
-const uploadFileBtn = document.getElementById("uploadFileBtn");
+  // DOM
+  const fileInput = document.getElementById("audioFile");
+  const fileName = document.getElementById("fileName");
+  const previewAudio = document.getElementById("previewAudio");
+  const uploadFileBtn = document.getElementById("uploadFileBtn");
 
-const startBtn = document.getElementById("startRecord");
-const stopBtn = document.getElementById("stopRecord");
-const uploadRecordBtn = document.getElementById("uploadRecord");
-const recordedAudio = document.getElementById("recordedAudio");
+  const startBtn = document.getElementById("startRecord");
+  const stopBtn = document.getElementById("stopRecord");
+  const uploadRecordBtn = document.getElementById("uploadRecord");
+  const recordedAudio = document.getElementById("recordedAudio");
 
-const regressionResult = document.getElementById("regressionResult");
-const loadingOverlay = document.getElementById("loadingOverlay");
-const loadingText = document.getElementById("loadingText");
+  const regressionResult = document.getElementById("regressionResult");
 
-// enable/disable UI while loading
-function setLoading(isLoading, message = "⏳ 預測中…(預估時間：三分鐘)") {
-  if (isLoading) {
-    loadingText.textContent = message;
-    loadingOverlay.style.display = "flex";
-  } else {
-    loadingOverlay.style.display = "none";
+  const loadingOverlay = document.getElementById("loadingOverlay");
+  const loadingText = document.getElementById("loadingText");
+
+  let serverAwake = false; // 追蹤伺服器是否已經喚醒
+
+  // enable/disable UI while loading
+  function setLoading(isLoading, message = "⏳ 預測中…(預估時間：三分鐘)") {
+    if (isLoading) {
+      loadingText.textContent = message;
+      loadingOverlay.style.display = "flex";
+    } else {
+      loadingOverlay.style.display = "none";
+    }
+    uploadFileBtn.disabled = isLoading;
+    uploadRecordBtn.disabled = isLoading || !recordedAudio.src;
+    fileInput.disabled = isLoading;
+    startBtn.disabled = isLoading;
+    stopBtn.disabled = isLoading || stopBtn.disabled;
   }
-  uploadFileBtn.disabled = isLoading;
-  uploadRecordBtn.disabled = isLoading || !recordedAudio.src;
-  fileInput.disabled = isLoading;
-  startBtn.disabled = isLoading;
-  stopBtn.disabled = isLoading || stopBtn.disabled;
-}
 
-// 顯示預測中狀態
-function showPredictingState() {
-  regressionResult.textContent = "⏳ 預測中…";
-}
-
-// 顯示結果
-function displayResults(data) {
-  if (!data) {
-    regressionResult.textContent = "⚠️ 無回傳資料";
-    return;
+  function showPredictingState() {
+    regressionResult.textContent = "⏳ 預測中…(伺服器可能正在啟動，請耐心等待)";
   }
-  regressionResult.textContent = data.regression_stage || "無資料";
-}
 
-// fetch with timeout
-async function fetchWithTimeout(resource, options = {}) {
-  const { timeout = 300000 } = options; // 最長五分鐘
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  try {
-    const resp = await fetch(resource, { ...options, signal: controller.signal });
-    clearTimeout(id);
-    return resp;
-  } catch (err) {
-    clearTimeout(id);
-    throw err;
+  function displayResults(data) {
+    if (!data) {
+      regressionResult.textContent = "⚠️ 無回傳資料";
+      return;
+    }
+    regressionResult.textContent = data.regression_stage || "無資料";
   }
-}
 
-// 上傳音訊統一函數
-async function uploadAudio(file) {
-  const formData = new FormData();
-  formData.append("file", file);
-  setLoading(true);
-  showPredictingState();
-  try {
-    const res = await fetchWithTimeout(backendUrl, { method: "POST", body: formData });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    displayResults(data);
-  } catch (err) {
-    regressionResult.textContent = "⚠️ 上傳或網路錯誤";
-    console.error(err);
-  } finally {
-    setLoading(false);
+  async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 300000 } = options; // 五分鐘
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+      const resp = await fetch(resource, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return resp;
+    } catch (err) {
+      clearTimeout(id);
+      throw err;
+    }
   }
-}
 
-// file change
-fileInput.addEventListener("change", () => {
-  const file = fileInput.files[0];
-  if (file) {
-    fileName.textContent = file.name;
-    previewAudio.src = URL.createObjectURL(file);
-  } else {
-    fileName.textContent = "未選擇檔案";
-    previewAudio.src = "";
+  // 首次喚醒 Render
+  async function wakeServer() {
+    try {
+      setLoading(true, "⏳ 首次喚醒伺服器中，可能需要 1~2 分鐘...");
+      await fetchWithTimeout(backendUrl, { method: "GET" }); // GET 喚醒
+      serverAwake = true;
+    } catch (err) {
+      console.warn("伺服器喚醒失敗，可重試:", err.message);
+    } finally {
+      setLoading(false);
+    }
   }
-});
 
-// 上傳檔案
-uploadFileBtn.addEventListener("click", () => {
-  const file = fileInput.files[0];
-  if (!file) return alert("請先選擇音訊檔案！");
-  uploadAudio(file);
-});
+  // 統一上傳函數
+  async function uploadAudio(file) {
+    if (!serverAwake) {
+      await wakeServer(); // 首次喚醒
+    }
 
-// 錄音功能
-let mediaRecorder, recordedChunks = [];
-
-startBtn.addEventListener("click", async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    recordedChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunks, { type: "audio/wav" });
-      recordedAudio.src = URL.createObjectURL(blob);
-      uploadRecordBtn.disabled = false;
-    };
-    mediaRecorder.start();
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    regressionResult.textContent = "🎙️ 錄音中…";
-  } catch (err) {
-    alert("無法取得麥克風權限或裝置不支援。");
-    console.error(err);
+    const formData = new FormData();
+    formData.append("file", file);
+    setLoading(true, "⏳ 音訊上傳中，請耐心等待（可能約三分鐘）...");
+    showPredictingState();
+    try {
+      const res = await fetchWithTimeout(backendUrl, { method: "POST", body: formData });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      displayResults(data);
+    } catch (err) {
+      regressionResult.textContent = "⚠️ 上傳或網路錯誤：" + (err.message || "");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }
-});
 
-stopBtn.addEventListener("click", () => {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-  startBtn.disabled = false;
-  stopBtn.disabled = true;
-  regressionResult.textContent = "✅ 錄音完成，可上傳";
-});
+  // file change
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (file) {
+      fileName.textContent = file.name;
+      previewAudio.src = URL.createObjectURL(file);
+    } else {
+      fileName.textContent = "未選擇檔案";
+      previewAudio.src = "";
+    }
+  });
 
-uploadRecordBtn.addEventListener("click", () => {
-  if (!recordedChunks.length) return alert("請先錄音再上傳。");
-  const blob = new Blob(recordedChunks, { type: "audio/wav" });
-  uploadAudio(blob);
-});
+  // 上傳檔案
+  uploadFileBtn.addEventListener("click", () => {
+    const file = fileInput.files[0];
+    if (!file) return alert("請先選擇音訊檔案！");
+    uploadAudio(file);
+  });
 
-setLoading(false);
+  // 錄音功能
+  let mediaRecorder, recordedChunks = [];
+
+  startBtn.addEventListener("click", async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: "audio/wav" });
+        recordedAudio.src = URL.createObjectURL(blob);
+        uploadRecordBtn.disabled = false;
+      };
+      mediaRecorder.start();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      regressionResult.textContent = "🎙️ 錄音中…";
+    } catch (err) {
+      alert("無法取得麥克風權限或裝置不支援。");
+      console.error(err);
+    }
+  });
+
+  stopBtn.addEventListener("click", () => {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    regressionResult.textContent = "✅ 錄音完成，可上傳";
+  });
+
+  uploadRecordBtn.addEventListener("click", () => {
+    if (!recordedChunks.length) return alert("請先錄音再上傳。");
+    const blob = new Blob(recordedChunks, { type: "audio/wav" });
+    uploadAudio(blob);
+  });
+
+  setLoading(false);
 </script>
+
 
 
 </body>
 </html>
+
 
 
