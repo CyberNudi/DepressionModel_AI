@@ -226,34 +226,36 @@ def predict_audio(file_path, model_file="model_weighted.pkl"):
 
 
 
-# --------- (7) FastAPI 部署區 ----------
+from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn, os
 
-from fastapi import UploadFile, File
-import uvicorn
+app = FastAPI()
+
+# ===== CORS 設定 =====
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 @app.post("/predict")
 async def predict_endpoint(file: UploadFile = File(...)):
-    """
-    接收上傳音訊並輸出模型預測值與分級
-    """
-    # 暫存檔案
     temp_path = f"temp_{file.filename}"
     with open(temp_path, "wb") as f:
         f.write(await file.read())
 
-    # 預測
     try:
         score, stage = predict_audio(temp_path, model_file="model_weighted.pkl")
         os.remove(temp_path)
         return {
             "predicted_PHQ8": round(score, 3),
-            "stage": stage
+            "regression_stage": stage   # <-- 前端用這個欄位
         }
     except Exception as e:
         return {"error": str(e)}
 
-
-# --- Render 啟動 ---
 if __name__ == "__main__":
     mode = "predict"  # 訓練請在本地執行
     if mode == "train":
@@ -272,5 +274,6 @@ if __name__ == "__main__":
         )
     else:
         uvicorn.run(app, host="0.0.0.0", port=10000)
+
 
 
