@@ -201,16 +201,32 @@ def train_model(train_folder, label_file, model_out, weight_mode='exp', exp_base
     plt.legend()
     plt.show()   # ✅ 本地端顯示
 
-# --------- (5) 單檔預測 ----------
+# --------- (5) 預測分段函式 ----------
+def phq8_stage(score: float) -> str:
+    """依據 PHQ-8 分數分級"""
+    if score < 5:
+        return "輕微無憂"
+    elif score < 10:
+        return "輕度憂鬱"
+    elif score < 15:
+        return "中度憂鬱"
+    else:
+        return "中重／重度憂鬱"
+
+
+# --------- (6) 單檔預測 ----------
 def predict_audio(file_path, model_file="model_weighted.pkl"):
     data = joblib.load(model_file)
     model = data["model"]
     features = extract_features(file_path).reshape(1, -1)
     pred = np.clip(model.predict(features), 0, 24)
-    return float(pred[0])
+    score = float(pred[0])
+    stage = phq8_stage(score)
+    return score, stage
 
 
-# --------- (6) FastAPI 部署區 ----------
+
+# --------- (7) FastAPI 部署區 ----------
 
 from fastapi import UploadFile, File
 import uvicorn
@@ -253,3 +269,4 @@ if __name__ == "__main__":
         )
     else:
         uvicorn.run(app, host="0.0.0.0", port=10000)
+
