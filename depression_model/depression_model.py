@@ -206,12 +206,14 @@ def phq8_stage(score: float) -> str:
     """依據 PHQ-8 分數分級"""
     if score < 5:
         return "輕微無憂"
-    elif score < 10:
+    elif score < 9:
         return "輕度憂鬱"
     elif score < 15:
         return "中度憂鬱"
+    elif score <20:
+        return "中重度憂鬱"
     else:
-        return "中重／重度憂鬱"
+        return "重度憂鬱"
 
 
 # --------- (6) 單檔預測 ----------
@@ -274,6 +276,7 @@ if __name__ == "__main__":
         )
     else:
         uvicorn.run(app, host="0.0.0.0", port=10000)
+
 
 
 
