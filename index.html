@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>語音憂鬱檢測系統（PHQ-8 模型）</title>
+  <title>語音憂鬱檢測系統（PHQ-8 回歸模型）</title>
   <style>
     body {
       font-family: "Microsoft JhengHei", sans-serif;
@@ -34,7 +34,7 @@
     button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
     audio { margin-top: 10px; width: 100%; border-radius: 8px; }
 
-    .result-container { display: flex; justify-content: space-around; margin-top: 20px; flex-wrap: wrap; gap: 10px; }
+    .result-container { display: flex; justify-content: center; margin-top: 20px; flex-wrap: wrap; gap: 10px; }
     .result-box { flex: 1; min-width: 250px; background-color: rgba(255,255,255,0.06); border-radius: 12px; padding: 15px; text-align: center; transition: background 0.3s; }
     .result-box:hover { background-color: rgba(255,255,255,0.12); }
     .result-title { font-weight: bold; color: #66b3ff; margin-bottom: 6px; letter-spacing: 1px; }
@@ -44,10 +44,30 @@
     .loading-card { background: rgba(255,255,255,0.06); border-radius: 12px; padding: 18px 24px; display: flex; align-items: center; gap: 12px; color: #fff; box-shadow: 0 8px 30px rgba(0,0,0,0.6); backdrop-filter: blur(6px); }
     .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); border-top-color: #66b3ff; animation: spin 0.9s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+	#adviceSection {
+	  margin-top: 30px;
+	}
+	#adviceBox {
+	  background-color: rgba(255,255,255,0.06);
+	  border-radius: 12px;
+	  padding: 20px;
+	  text-align: center;
+	  transition: background 0.3s;
+	}
+	#adviceBox:hover {
+	  background-color: rgba(255,255,255,0.12);
+	}
+	#adviceText {
+	  font-size: 18px;
+	  font-weight: normal;
+	  color: #ffffff;
+	  min-height: 50px;
+	}
   </style>
 </head>
 <body>
-  <h1>語音憂鬱檢測系統</h1>
+  <h1>語音憂鬱檢測系統（回歸模型）</h1>
 
   <div class="section" id="mainSection">
     <h2>使用預先錄製的音訊</h2>
@@ -78,10 +98,6 @@
         <div class="result-title">回歸模型結果</div>
         <div id="regressionResult" class="result-text">尚無結果</div>
       </div>
-      <div class="result-box">
-        <div class="result-title">CNN 模型結果</div>
-        <div id="cnnResult" class="result-text">尚無結果</div>
-      </div>
     </div>
   </div>
 
@@ -92,44 +108,32 @@
     </div>
   </div>
 
+  <div class="section" id="adviceSection">
+    <h2>根據結果分段給予生活建議</h2>
+    <div class="result-box" id="adviceBox">
+      <div class="result-title">生活建議</div>
+      <div id="adviceText" class="result-text">尚無結果</div>
+    </div>
+  </div>
+
   <script>
-    // 自動喚醒 Render 服務
-  async function wakeUpService() {
-    try {
-      console.log("喚醒後端服務中...");
-      await fetch(backendUrl, { method: "HEAD", mode: "no-cors" });
-      console.log("服務喚醒完成！");
-    } catch (err) {
-      console.warn("服務喚醒可能失敗:", err);
-    }
-  }
-  
-  // 網頁載入時自動喚醒
-  window.addEventListener("load", () => {
-    wakeUpService();
-  });
-  // ========== Render 後端 API ==========
   const backendUrl = "https://depressionmodel-ai.onrender.com/predict";
 
-  // DOM
   const fileInput = document.getElementById("audioFile");
   const fileName = document.getElementById("fileName");
   const previewAudio = document.getElementById("previewAudio");
   const uploadFileBtn = document.getElementById("uploadFileBtn");
-
   const startBtn = document.getElementById("startRecord");
   const stopBtn = document.getElementById("stopRecord");
   const uploadRecordBtn = document.getElementById("uploadRecord");
   const recordedAudio = document.getElementById("recordedAudio");
-
   const regressionResult = document.getElementById("regressionResult");
-
   const loadingOverlay = document.getElementById("loadingOverlay");
   const loadingText = document.getElementById("loadingText");
 
-  let serverAwake = false; // 追蹤伺服器是否已經喚醒
+  let serverAwake = false;
+  let mediaRecorder, recordedChunks = [];
 
-  // enable/disable UI while loading
   function setLoading(isLoading, message = "⏳ 預測中…(預估時間：三分鐘)") {
     if (isLoading) {
       loadingText.textContent = message;
@@ -144,6 +148,21 @@
     stopBtn.disabled = isLoading || stopBtn.disabled;
   }
 
+  function getAdvice(stage) {
+    switch (stage) {
+      case '輕度憂鬱':
+        return "有時候生活中總是會有一點點的不愉快，不過對你好像沒有造成太大的影響。試著讓自己放鬆一下，轉換心情，多看看周遭那些讓你微笑的小事吧！";
+      case '中度憂鬱':
+        return "你可能感覺生活讓你有些壓力或挫折，這是可以被理解的。給自己一點喘息的時間，散散步、閱讀或與信任的人聊聊，讓內心逐漸回到平衡。";
+	  case '中重度憂鬱':
+        return "你可能已經感受到心情低落影響了生活節奏。試著把焦點放在能帶來一點快樂的事上，也許是一首歌、一段對話、一杯溫茶。你值得被溫柔地對待。";
+      case '重度憂鬱':
+        return "看起來生活的壓力已經讓你感到難以承受。請不要獨自面對，與信任的人談談，或尋求專業心理師的協助。你並不孤單，幫助就在你身邊。";
+      default:
+        return "尚無結果，暫時無法提供建議。請嘗試上傳或錄製音訊進行分析。";
+    }
+  }
+
   function showPredictingState() {
     regressionResult.textContent = "⏳ 預測中…(伺服器可能正在啟動，請耐心等待)";
   }
@@ -153,11 +172,12 @@
       regressionResult.textContent = "⚠️ 無回傳資料";
       return;
     }
-    regressionResult.textContent = data.regression_stage || "無資料";
+    regressionResult.textContent = data.regression_stage;
+    document.getElementById("adviceText").textContent = getAdvice(data.regression_stage);
   }
 
   async function fetchWithTimeout(resource, options = {}) {
-    const { timeout = 300000 } = options; // 五分鐘
+    const { timeout = 300000 } = options;
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
@@ -170,25 +190,20 @@
     }
   }
 
-  // 首次喚醒 Render
   async function wakeServer() {
     try {
       setLoading(true, "⏳ 首次喚醒伺服器中，可能需要 1~2 分鐘...");
-      await fetchWithTimeout(backendUrl, { method: "GET" }); // GET 喚醒
+      await fetchWithTimeout(backendUrl, { method: "GET" });
       serverAwake = true;
     } catch (err) {
-      console.warn("伺服器喚醒失敗，可重試:", err.message);
+      console.warn("伺服器喚醒失敗:", err.message);
     } finally {
       setLoading(false);
     }
   }
 
-  // 統一上傳函數
   async function uploadAudio(file) {
-    if (!serverAwake) {
-      await wakeServer(); // 首次喚醒
-    }
-
+    if (!serverAwake) await wakeServer();
     const formData = new FormData();
     formData.append("file", file);
     setLoading(true, "⏳ 音訊上傳中，請耐心等待（可能約三分鐘）...");
@@ -206,7 +221,7 @@
     }
   }
 
-  // file change
+  // 檔案上傳事件
   fileInput.addEventListener("change", () => {
     const file = fileInput.files[0];
     if (file) {
@@ -218,16 +233,13 @@
     }
   });
 
-  // 上傳檔案
   uploadFileBtn.addEventListener("click", () => {
     const file = fileInput.files[0];
     if (!file) return alert("請先選擇音訊檔案！");
     uploadAudio(file);
   });
 
-  // 錄音功能
-  let mediaRecorder, recordedChunks = [];
-
+  // 錄音控制
   startBtn.addEventListener("click", async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -263,13 +275,6 @@
   });
 
   setLoading(false);
-</script>
-
-
-
+  </script>
 </body>
 </html>
-
-
-
-
