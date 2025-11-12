@@ -215,14 +215,20 @@ def phq8_stage(score: float) -> str:
     else:
         return "重度憂鬱"
 
-
+# --------- (5) 拉伸函式 ----------
+def stretch(x):
+    if x <= 8:
+        return 1 + (x - 5) * (2/3)
+    else:
+        return 3 + (x - 8) * (8/3)
+        
 # --------- (6) 單檔預測 ----------
 def predict_audio(file_path, model_file="model_weighted.pkl"):
     data = joblib.load(model_file)
     model = data["model"]
     features = extract_features(file_path).reshape(1, -1)
     pred = np.clip(model.predict(features), 0, 24)
-    score = float(pred[0])
+    score = stretch(float(pred[0]))
     stage = phq8_stage(score)
     return score, stage
 
@@ -276,6 +282,7 @@ if __name__ == "__main__":
         )
     else:
         uvicorn.run(app, host="0.0.0.0", port=10000)
+
 
 
 
