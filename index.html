@@ -3,281 +3,175 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>語音憂鬱檢測系統（PHQ-8 回歸模型）</title>
+  <title>語音憂鬱檢測系統（PHQ-8 分數）</title>
   <style>
     body {
       font-family: "Microsoft JhengHei", sans-serif;
       background-color: #0e0e0e;
-      color: #ffffff;
+      color: #fff;
       margin: 0;
       padding: 0;
-      height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
       flex-direction: column;
+      min-height: 100vh;
       background-image: radial-gradient(circle at top left, #1e1e1e, #000);
     }
-
-    h1 { text-align: center; color: #ffffff; margin-bottom: 20px; font-size: 28px; letter-spacing: 2px; }
-    .section { background: rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 30px; width: 90%; max-width: 750px; box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); }
-    hr { margin: 30px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.2); }
-    h2 { color: #ffffff; text-align: center; margin-bottom: 10px; }
-    p { text-align: center; color: #cccccc; font-size: 14px; }
-
-    .file-section, .record-section { display: flex; flex-direction: column; gap: 10px; align-items: center; }
-    .file-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
-
-    input[type="file"] { color: #ccc; background: transparent; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; padding: 5px; cursor: pointer; }
-    button { padding: 8px 14px; border: none; background-color: #3498db; color: white; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
+    h1 { text-align: center; margin-bottom: 20px; font-size: 28px; letter-spacing: 2px; }
+    .section { background: rgba(255,255,255,0.08); border-radius: 16px; padding: 30px; width: 90%; max-width: 700px; margin-bottom: 20px; }
+    input[type="file"], button { border-radius: 6px; padding: 6px 12px; border: none; cursor: pointer; }
+    button { background-color: #3498db; color: #fff; transition: 0.2s; }
     button:hover { background-color: #2980b9; transform: scale(1.03); }
-    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-    audio { margin-top: 10px; width: 100%; border-radius: 8px; }
-
-    .result-container { display: flex; justify-content: center; margin-top: 20px; flex-wrap: wrap; gap: 10px; }
-    .result-box { flex: 1; min-width: 250px; background-color: rgba(255,255,255,0.06); border-radius: 12px; padding: 15px; text-align: center; transition: background 0.3s; }
-    .result-box:hover { background-color: rgba(255,255,255,0.12); }
-    .result-title { font-weight: bold; color: #66b3ff; margin-bottom: 6px; letter-spacing: 1px; }
-    .result-text { font-size: 20px; font-weight: bold; color: #ffffff; min-height: 28px; }
-
-    .loading-overlay { position: fixed; left: 0; top: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 9999; }
-    .loading-card { background: rgba(255,255,255,0.06); border-radius: 12px; padding: 18px 24px; display: flex; align-items: center; gap: 12px; color: #fff; box-shadow: 0 8px 30px rgba(0,0,0,0.6); backdrop-filter: blur(6px); }
-    .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); border-top-color: #66b3ff; animation: spin 0.9s linear infinite; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    audio { width: 100%; margin-top: 10px; border-radius: 6px; }
+    .result-box { background: rgba(255,255,255,0.06); border-radius: 12px; padding: 15px; text-align: center; margin-top: 15px; }
+    .result-title { color: #66b3ff; font-weight: bold; margin-bottom: 6px; }
+    .result-text { font-size: 20px; font-weight: bold; color: #fff; min-height: 28px; }
+    .loading-overlay { position: fixed; inset:0; display: none; justify-content: center; align-items: center; background: rgba(0,0,0,0.45); z-index:9999; }
+    .spinner { width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.15); border-top-color: #66b3ff; border-radius: 50%; animation: spin 0.9s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-	#adviceSection {
-	  margin-top: 30px;
-	}
-	#adviceBox {
-	  background-color: rgba(255,255,255,0.06);
-	  border-radius: 12px;
-	  padding: 20px;
-	  text-align: center;
-	  transition: background 0.3s;
-	}
-	#adviceBox:hover {
-	  background-color: rgba(255,255,255,0.12);
-	}
-	#adviceText {
-	  font-size: 18px;
-	  font-weight: normal;
-	  color: #ffffff;
-	  min-height: 50px;
-	}
   </style>
 </head>
 <body>
-  <h1>語音憂鬱檢測系統（回歸模型）</h1>
+  <h1>語音憂鬱檢測系統（PHQ-8 分數）</h1>
 
-  <div class="section" id="mainSection">
+  <div class="section">
     <h2>使用預先錄製的音訊</h2>
-    <div class="file-section">
-      <div class="file-row">
-        <input type="file" id="audioFile" accept="audio/*">
-        <span id="fileName">未選擇檔案</span>
-        <button id="uploadFileBtn">上傳並預測</button>
-      </div>
-      <audio id="previewAudio" controls></audio>
-    </div>
+    <input type="file" id="audioFile" accept="audio/*">
+    <button id="uploadFileBtn">上傳並預測</button>
+    <audio id="previewAudio" controls></audio>
+  </div>
 
-    <hr />
-
+  <div class="section">
     <h2>立刻錄音檢測</h2>
-    <p>說說今天發生了什麼事，或你現在的感覺是什麼：</p>
-    <div class="record-section">
-      <div>
-        <button id="startRecord">開始錄音</button>
-        <button id="stopRecord" disabled>停止錄音</button>
-        <button id="uploadRecord" disabled>上傳並預測</button>
-      </div>
-      <audio id="recordedAudio" controls></audio>
-    </div>
-
-    <div class="result-container">
-      <div class="result-box">
-        <div class="result-title">回歸模型結果</div>
-        <div id="regressionResult" class="result-text">尚無結果</div>
-      </div>
-    </div>
+    <button id="startRecord">開始錄音</button>
+    <button id="stopRecord" disabled>停止錄音</button>
+    <button id="uploadRecord" disabled>上傳並預測</button>
+    <audio id="recordedAudio" controls></audio>
   </div>
 
-  <div class="loading-overlay" id="loadingOverlay" aria-hidden="true">
-    <div class="loading-card">
-      <div class="spinner" aria-hidden="true"></div>
-      <div id="loadingText">⏳ 預測中…</div>
-    </div>
+  <div class="section result-box">
+    <div class="result-title">PHQ-8 分數</div>
+    <div id="regressionResult" class="result-text">尚無結果</div>
   </div>
 
-  <div class="section" id="adviceSection">
-    <h2>根據結果分段給予生活建議</h2>
-    <div class="result-box" id="adviceBox">
-      <div class="result-title">生活建議</div>
-      <div id="adviceText" class="result-text">尚無結果</div>
-    </div>
+  <div class="section result-box">
+    <div class="result-title">建議</div>
+    <div id="adviceText" class="result-text">尚無結果</div>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
   </div>
 
   <script>
-  const backendUrl = "https://depressionmodel-ai.onrender.com/predict";
+    const backendUrl = "https://depressionmodel-ai.onrender.com/predict";
+    const fileInput = document.getElementById("audioFile");
+    const previewAudio = document.getElementById("previewAudio");
+    const uploadFileBtn = document.getElementById("uploadFileBtn");
+    const startBtn = document.getElementById("startRecord");
+    const stopBtn = document.getElementById("stopRecord");
+    const uploadRecordBtn = document.getElementById("uploadRecord");
+    const recordedAudio = document.getElementById("recordedAudio");
+    const regressionResult = document.getElementById("regressionResult");
+    const adviceText = document.getElementById("adviceText");
+    const loadingOverlay = document.getElementById("loadingOverlay");
 
-  const fileInput = document.getElementById("audioFile");
-  const fileName = document.getElementById("fileName");
-  const previewAudio = document.getElementById("previewAudio");
-  const uploadFileBtn = document.getElementById("uploadFileBtn");
-  const startBtn = document.getElementById("startRecord");
-  const stopBtn = document.getElementById("stopRecord");
-  const uploadRecordBtn = document.getElementById("uploadRecord");
-  const recordedAudio = document.getElementById("recordedAudio");
-  const regressionResult = document.getElementById("regressionResult");
-  const loadingOverlay = document.getElementById("loadingOverlay");
-  const loadingText = document.getElementById("loadingText");
+    let mediaRecorder, recordedChunks = [];
 
-  let serverAwake = false;
-  let mediaRecorder, recordedChunks = [];
-
-  function setLoading(isLoading, message = "⏳ 預測中…(預估時間：三分鐘)") {
-    if (isLoading) {
-      loadingText.textContent = message;
-      loadingOverlay.style.display = "flex";
-    } else {
-      loadingOverlay.style.display = "none";
+    function setLoading(isLoading) {
+      loadingOverlay.style.display = isLoading ? "flex" : "none";
+      uploadFileBtn.disabled = isLoading;
+      uploadRecordBtn.disabled = isLoading || !recordedAudio.src;
+      fileInput.disabled = isLoading;
+      startBtn.disabled = isLoading;
+      stopBtn.disabled = isLoading || stopBtn.disabled;
     }
-    uploadFileBtn.disabled = isLoading;
-    uploadRecordBtn.disabled = isLoading || !recordedAudio.src;
-    fileInput.disabled = isLoading;
-    startBtn.disabled = isLoading;
-    stopBtn.disabled = isLoading || stopBtn.disabled;
-  }
 
-  function getAdvice(stage) {
-    switch (stage) {
-		case '輕微無憂':
-			return "身心健康--太好了，快去找點事做吧~"
-		case '輕度憂鬱':
-        	return "有時候生活中總是會有一點點的不愉快，不過對你好像沒有造成太大的影響。試著讓自己放鬆一下，轉換心情，多看看周遭那些讓你微笑的小事吧！";
-      	case '中度憂鬱':
-        	return "你可能感覺生活讓你有些壓力或挫折，這是可以被理解的。給自己一點喘息的時間，散散步、閱讀或與信任的人聊聊，讓內心逐漸回到平衡。";
-	  	case '中重度憂鬱':
-        	return "你可能已經感受到心情低落影響了生活節奏。試著把焦點放在能帶來一點快樂的事上，也許是一首歌、一段對話、一杯溫茶。你值得被溫柔地對待。";
-      	case '重度憂鬱':
-        	return "看起來生活的壓力已經讓你感到難以承受。請不要獨自面對，與信任的人談談，或尋求專業心理師的協助。你並不孤單，幫助就在你身邊。";
-      	default:
-        	return "尚無結果，暫時無法提供建議。請嘗試上傳或錄製音訊進行分析。";
+    function getAdviceByScore(score) {
+      if (score <= 4) return "身心健康--太好了，快去找點事做吧~";
+      if (score <= 9) return "輕度憂鬱，試著讓自己放鬆，轉換心情。";
+      if (score <= 14) return "中度憂鬱，給自己喘息時間，散步或與信任的人聊聊。";
+      if (score <= 19) return "中重度憂鬱，把焦點放在能帶來快樂的事上。";
+      return "重度憂鬱，請尋求專業心理師的協助。";
     }
-  }
 
-  function showPredictingState() {
-    regressionResult.textContent = "⏳ 預測中…(伺服器可能正在啟動，請耐心等待)";
-  }
-
-  function displayResults(data) {
-    if (!data) {
-      regressionResult.textContent = "⚠️ 無回傳資料";
-      return;
+    function displayResults(data) {
+      if (!data || data.phq8_score === undefined) {
+        regressionResult.textContent = "⚠️ 無回傳資料";
+        adviceText.textContent = "";
+        return;
+      }
+      const score = data.phq8_score;
+      regressionResult.textContent = score;
+      adviceText.textContent = getAdviceByScore(score);
     }
-    regressionResult.textContent = data.regression_stage;
-    document.getElementById("adviceText").textContent = getAdvice(data.regression_stage);
-  }
 
-  async function fetchWithTimeout(resource, options = {}) {
-    const { timeout = 300000 } = options;
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-      const resp = await fetch(resource, { ...options, signal: controller.signal });
-      clearTimeout(id);
-      return resp;
-    } catch (err) {
-      clearTimeout(id);
-      throw err;
+    async function uploadAudio(file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      setLoading(true);
+      regressionResult.textContent = "⏳ 預測中…";
+      try {
+        const res = await fetch(backendUrl, { method: "POST", body: formData });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        displayResults(data);
+      } catch (err) {
+        regressionResult.textContent = "⚠️ 上傳或網路錯誤";
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     }
-  }
 
-  async function wakeServer() {
-    try {
-      setLoading(true, "⏳ 首次喚醒伺服器中，可能需要 5~10 分鐘...");
-      await fetchWithTimeout(backendUrl, { method: "GET" });
-      serverAwake = true;
-    } catch (err) {
-      console.warn("伺服器喚醒失敗:", err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+    // 檔案上傳
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      previewAudio.src = file ? URL.createObjectURL(file) : "";
+    });
 
-  async function uploadAudio(file) {
-    if (!serverAwake) await wakeServer();
-    const formData = new FormData();
-    formData.append("file", file);
-    setLoading(true, "⏳ 音訊上傳中，請耐心等待（可能約三分鐘）...");
-    showPredictingState();
-    try {
-      const res = await fetchWithTimeout(backendUrl, { method: "POST", body: formData });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      displayResults(data);
-    } catch (err) {
-      regressionResult.textContent = "⚠️ 上傳或網路錯誤：" + (err.message || "");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
+    uploadFileBtn.addEventListener("click", () => {
+      const file = fileInput.files[0];
+      if (!file) return alert("請先選擇音訊檔案！");
+      uploadAudio(file);
+    });
 
-  // 檔案上傳事件
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files[0];
-    if (file) {
-      fileName.textContent = file.name;
-      previewAudio.src = URL.createObjectURL(file);
-    } else {
-      fileName.textContent = "未選擇檔案";
-      previewAudio.src = "";
-    }
-  });
+    // 錄音
+    startBtn.addEventListener("click", async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: "audio/wav" });
+          recordedAudio.src = URL.createObjectURL(blob);
+          uploadRecordBtn.disabled = false;
+        };
+        mediaRecorder.start();
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        regressionResult.textContent = "🎙️ 錄音中…";
+      } catch (err) {
+        alert("無法取得麥克風權限或裝置不支援。");
+        console.error(err);
+      }
+    });
 
-  uploadFileBtn.addEventListener("click", () => {
-    const file = fileInput.files[0];
-    if (!file) return alert("請先選擇音訊檔案！");
-    uploadAudio(file);
-  });
+    stopBtn.addEventListener("click", () => {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      regressionResult.textContent = "✅ 錄音完成，可上傳";
+    });
 
-  // 錄音控制
-  startBtn.addEventListener("click", async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recordedChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: "audio/wav" });
-        recordedAudio.src = URL.createObjectURL(blob);
-        uploadRecordBtn.disabled = false;
-      };
-      mediaRecorder.start();
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-      regressionResult.textContent = "🎙️ 錄音中…";
-    } catch (err) {
-      alert("無法取得麥克風權限或裝置不支援。");
-      console.error(err);
-    }
-  });
-
-  stopBtn.addEventListener("click", () => {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-    regressionResult.textContent = "✅ 錄音完成，可上傳";
-  });
-
-  uploadRecordBtn.addEventListener("click", () => {
-    if (!recordedChunks.length) return alert("請先錄音再上傳。");
-    const blob = new Blob(recordedChunks, { type: "audio/wav" });
-    uploadAudio(blob);
-  });
-
-  setLoading(false);
+    uploadRecordBtn.addEventListener("click", () => {
+      if (!recordedChunks.length) return alert("請先錄音再上傳。");
+      const blob = new Blob(recordedChunks, { type: "audio/wav" });
+      uploadAudio(blob);
+    });
   </script>
 </body>
 </html>
-
