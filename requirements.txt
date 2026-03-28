@@ -5,3 +5,5 @@ scikit-learn
 librosa
 joblib
 soundfile
+fastapi
+uvicorn[standard]
