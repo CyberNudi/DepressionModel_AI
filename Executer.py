@@ -6,7 +6,9 @@ from flask_cors import CORS
 from features import extract_features  # 確認這個模組能 import
 
 app = Flask(__name__)
-CORS(app)  # 允許跨域請求
+
+# 完整允許跨域，這裡允許所有網域
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 MODEL_PATH = "model_weighted.pkl"
 
@@ -21,8 +23,16 @@ def home():
     return "Audio Depression Prediction API Running"
 
 
-@app.route("/predict", methods=["POST"])
+@app.route("/predict", methods=["POST", "OPTIONS"])
 def predict_api():
+    # 處理預檢請求
+    if request.method == "OPTIONS":
+        response = jsonify({"message": "Preflight OK"})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        return response, 200
+
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
@@ -38,11 +48,15 @@ def predict_api():
         # 預測
         prediction = model.predict(features)[0]
 
-        # 回傳 JSON，前端直接拿 prediction 當 PHQ-8 分數
-        return jsonify({"phq8_score": float(prediction)})
+        # 回傳 JSON
+        response = jsonify({"phq8_score": float(prediction)})
+        response.headers.add("Access-Control-Allow-Origin", "*")  # 確保回應有 header
+        return response
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        response = jsonify({"error": str(e)})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response, 500
 
     finally:
         if os.path.exists(temp_path):
@@ -50,6 +64,5 @@ def predict_api():
 
 
 if __name__ == "__main__":
-    # Render 預設 PORT 用環境變數
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
